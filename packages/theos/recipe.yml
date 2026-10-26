@@ -1,0 +1,5 @@
+package: theos
+upstream: https://github.com/theos/theos.git
+policy: track_head
+ref: master
+auto_trigger: true

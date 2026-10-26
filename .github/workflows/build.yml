@@ -1,0 +1,68 @@
+name: Build Recipe
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package name to build'
+        required: true
+        default: 'theos'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install dpkg
+
+      - name: Build specified package
+        run: |
+          chmod +x packages/${{ github.event.inputs.package_name }}/build.sh
+          bash packages/${{ github.event.inputs.package_name }}/build.sh
+
+      - name: Extract and Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          GRY='\033[0;37m'; GRN='\033[0;32m'; YLW='\033[1;33m'; N='\033[0m'
+          PKG="${{ github.event.inputs.package_name }}"
+          DEB="build_${PKG}/${PKG}.deb"
+          SRC="build_${PKG}/${PKG}-source.tar.gz"
+          FN=$(basename "$DEB")
+          
+          VERSION_TAG="${PKG}-v$(date +%Y%m%d-%H%M%S)"
+          BIN_TAG="${VERSION_TAG}"
+          SRC_TAG="${VERSION_TAG}-src"
+          
+          echo -e "${GRY}[>] Generating Packages.entry${N}"
+          dpkg-deb -f "$DEB" > /tmp/ctrl.txt
+          grep -E '^(Package|Version|Architecture|Depends|Description|Author|Name):' /tmp/ctrl.txt | sed 's/^Architecture: .*/Architecture: iphoneos-arm64/' > Packages.entry
+          echo "Filename: https://github.com/${{ github.repository }}/releases/download/${BIN_TAG}/${FN}" >> Packages.entry
+          echo "Size: $(stat -f%z "$DEB")" >> Packages.entry
+          echo "MD5sum: $(md5 -q "$DEB")" >> Packages.entry
+          echo "SHA256: $(shasum -a 256 "$DEB" | awk '{print $1}')" >> Packages.entry
+          echo "" >> Packages.entry
+          echo -e "  ${GRN}✓${N} Entry generated"
+          
+          echo -e "${GRY}[>] Publishing Binary Release${N}"
+          gh release create "$BIN_TAG" "$DEB" Packages.entry -t "$BIN_TAG" -n "Binary Release $BIN_TAG"
+          echo -e "  ${GRN}✓${N} Binary Release published"
+          
+          if [ -f "$SRC" ]; then
+            echo -e "${GRY}[>] Publishing Source Snapshot Release${N}"
+            gh release create "$SRC_TAG" "$SRC" -t "$SRC_TAG" -n "Source Snapshot for $BIN_TAG"
+            echo -e "  ${GRN}✓${N} Source Release published"
+          fi
+
+      - name: Trigger Main Repo Update
+        run: |
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/locationovo/repo/dispatches \
+            -d '{"event_type": "update-index"}'
