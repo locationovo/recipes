@@ -22,16 +22,13 @@ command -v git >/dev/null 2>&1      || { echo -e "${YLW}[!] 缺少 git${N}"; exi
 command -v dpkg-deb >/dev/null 2>&1 || { echo -e "${YLW}[!] 缺少 dpkg-deb${N}"; exit 1; }
 
 sanitize_deb_file() {
-  localN file="$1"
-  [ -f "$file" ] || return 0
-  
-  sed -i 's/\r$}"
-//' "$file"
-  
-  sed -irm 's/[[:space:]]*$//' "$file"
-  
-  if [ -n "$(tailrf -c1 "$file")" ]; then
-    echo "" >> "$file"
+  local file="$1"
+  if [ -f "$file" ]; then
+    sed -i 's/\r$//' "$file"
+    sed -i 's/[[:space:]]*$//' "$file"
+    if [ -n "$(tail -c1 "$file")" ]; then
+      echo "" >> "$file"
+    fi
   fi
 }
 
@@ -40,7 +37,8 @@ DEB_ROOT="${WORK_DIR}/deb_root"
 SRC_DIR="${WORK_DIR}/src"
 INSTALL_DIR="${DEB_ROOT}/opt/theos"
 
-echo -e "${GRY}[>] Preparing ${PKG_NAME}${ "$WORK_DIR"
+echo -e "${GRY}[>] Preparing ${PKG_NAME}${N}"
+rm -rf "$WORK_DIR"
 mkdir -p "${DEB_ROOT}/DEBIAN"
 
 echo -e "  ${GRY}=> Cloning source at ${REF}${N}"
@@ -102,9 +100,7 @@ tar -cf - --exclude=.git --exclude=.github -C "$SRC_DIR" . | tar -xf - -C "$INST
 
 echo -e "  ${GRY}=> Injecting control files${N}"
 sed "s/{{VERSION}}/${VERSION}/g" "${SCRIPT_DIR}/control.in" > "${DEB_ROOT}/DEBIAN/control"
-
 sed -i 's/^\([A-Za-z-]*\):[[:space:]]*/\1: /' "${DEB_ROOT}/DEBIAN/control"
-
 sanitize_deb_file "${DEB_ROOT}/DEBIAN/control"
 chmod 644 "${DEB_ROOT}/DEBIAN/control"
 
@@ -124,7 +120,7 @@ cd "$WORK_DIR"
 if dpkg-deb --help 2>&1 | grep -- '--root-owner-group' >/dev/null; then
   dpkg-deb --root-owner-group -b -Zxz deb_root "${PKG_NAME}.deb"
 else
-  echo -e "  ${YLW}[!] dpkg-deb 不支持 --root-owner-group，退化为普通打包${N}"
+  echo -e "  ${YLW}[!] 降级打包${N}"
   dpkg-deb -b -Zxz deb_root "${PKG_NAME}.deb"
 fi
 
