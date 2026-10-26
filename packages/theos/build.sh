@@ -24,8 +24,8 @@ command -v dpkg-deb >/dev/null 2>&1 || { echo -e "${YLW}[!] 缺少 dpkg-deb${N}"
 sanitize_deb_file() {
   local file="$1"
   if [ -f "$file" ]; then
-    sed -i 's/\r$//' "$file"
-    sed -i 's/[[:space:]]*$//' "$file"
+    perl -pi -e 's/\r$//' "$file"
+    perl -pi -e 's/[ \t]+$//' "$file"
     if [ -n "$(tail -c1 "$file")" ]; then
       echo "" >> "$file"
     fi
@@ -99,8 +99,8 @@ tar -cf - --exclude=.git --exclude=.github -C "$SRC_DIR" . | tar -xf - -C "$INST
 [ -f "${SCRIPT_DIR}/control.in" ] || { echo -e "${YLW}[!] 缺少 ${SCRIPT_DIR}/control.in${N}"; exit 1; }
 
 echo -e "  ${GRY}=> Injecting control files${N}"
-sed "s/{{VERSION}}/${VERSION}/g" "${SCRIPT_DIR}/control.in" > "${DEB_ROOT}/DEBIAN/control"
-sed -i 's/^\([A-Za-z-]*\):[[:space:]]*/\1: /' "${DEB_ROOT}/DEBIAN/control"
+perl -pe "s/\{\{VERSION\}\}/${VERSION}/g" "${SCRIPT_DIR}/control.in" > "${DEB_ROOT}/DEBIAN/control"
+perl -pi -e 's/^([A-Za-z-]*):\s*/$1: /' "${DEB_ROOT}/DEBIAN/control"
 sanitize_deb_file "${DEB_ROOT}/DEBIAN/control"
 chmod 644 "${DEB_ROOT}/DEBIAN/control"
 
